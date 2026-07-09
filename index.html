@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Duelo Amarillo · Juego de reacción para 2</title>
+<style>
+  :root{
+    --yellow: #f4c400;
+    --yellow-press: #d9ad00;
+    --yellow-dark: #8a6d00;
+    --green: #16a34a;
+    --ink: #201a00;
+    --ink-soft: rgba(32,26,0,.65);
+    --paper: #fff8e1;
+    --red: #d63b3b;
+  }
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+    background:#111; color:var(--ink);
+    touch-action:none; user-select:none; -webkit-user-select:none;
+  }
+
+  .board{
+    position:fixed; inset:0;
+    display:flex;
+    flex-direction: row; /* pantalla horizontal -> lado a lado */
+  }
+  @media (orientation: portrait){
+    .board{ flex-direction: column; } /* pantalla vertical -> arriba/abajo */
+  }
+
+  .half{
+    flex:1 1 50%;
+    position:relative;
+    background: var(--yellow);
+    display:flex; align-items:center; justify-content:center;
+    transition: background-color .08s linear;
+  }
+  /* separador */
+  .board{ gap:0; }
+  .half#p1{ border-right: 3px solid rgba(0,0,0,.15); }
+  .half#p2{ border-left: 3px solid rgba(0,0,0,.15); }
+  @media (orientation: portrait){
+    .half#p1{ border-right:none; border-bottom: 3px solid rgba(0,0,0,.15); }
+    .half#p2{ border-left:none; border-top: 3px solid rgba(0,0,0,.15); }
+  }
+
+  /* Jugador de "arriba" en modo vertical se voltea para que quede de frente a su lado */
+  @media (orientation: portrait){
+    .half#p1 .half-content{ transform: rotate(180deg); }
+  }
+  @media (orientation: landscape){
+    .half#p1 .half-content{ transform: none; }
+  }
+
+  .half-content{
+    text-align:center; pointer-events:none;
+  }
+  .half-name{
+    font-size: clamp(20px, 5vw, 42px);
+    font-weight:800; letter-spacing:.5px;
+    text-shadow: 0 1px 0 rgba(255,255,255,.25);
+  }
+  .half-hint{
+    margin-top:8px; font-size: clamp(12px,2.6vw,18px);
+    color: var(--ink-soft); font-weight:600;
+  }
+
+  /* Barra de control superior */
+  .topbar{
+    position:fixed; top:10px; left:50%; transform:translateX(-50%);
+    z-index:50; display:flex; gap:8px;
+  }
+  .topbar button{
+    pointer-events:auto;
+    border:none; border-radius:999px; padding:10px 16px;
+    background: rgba(20,16,0,.55); color:#fff8e1; font-weight:700;
+    font-size:13px; backdrop-filter: blur(4px);
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  }
+  .topbar button:active{ background: rgba(20,16,0,.8); }
+
+  /* Overlay resultado */
+  .overlay{
+    position:fixed; inset:0; z-index:100;
+    display:none; align-items:center; justify-content:center;
+    background: rgba(10,8,0,.55);
+  }
+  .overlay.show{ display:flex; }
+  .card{
+    background: var(--paper); border-radius:20px;
+    padding:28px 26px; width:min(90vw,380px); text-align:center;
+    box-shadow: 0 12px 40px rgba(0,0,0,.4);
+  }
+  .card h2{ margin:0 0 6px; font-size:26px; }
+  .card p{ margin:4px 0; color:var(--ink-soft); font-size:14px; }
+  .times{ display:flex; justify-content:space-between; margin:16px 0; gap:10px; }
+  .time-box{ flex:1; background:#fff; border-radius:12px; padding:10px; }
+  .time-box .n{ font-size:12px; color:var(--ink-soft); font-weight:700; }
+  .time-box .v{ font-size:20px; font-weight:800; margin-top:4px; }
+  .win{ color: var(--green); }
+  .lose{ color: var(--red); }
+  .card button{
+    margin-top:10px; border:none; border-radius:12px; padding:12px 18px;
+    background:var(--ink); color:var(--paper); font-weight:800; font-size:15px;
+    width:100%; cursor:pointer;
+  }
+  .card button.secondary{
+    background:transparent; color:var(--ink); border:2px solid var(--ink);
+    margin-top:8px;
+  }
+
+  /* Modales */
+  .modal{
+    position:fixed; inset:0; z-index:100; display:none;
+    align-items:center; justify-content:center; background: rgba(10,8,0,.55);
+  }
+  .modal.show{ display:flex; }
+  .modal .card{ max-height:80vh; overflow:auto; }
+  .field{ text-align:left; margin-bottom:12px; }
+  .field label{ display:block; font-size:12px; font-weight:700; color:var(--ink-soft); margin-bottom:4px; }
+  .field input{
+    width:100%; padding:10px 12px; border-radius:10px; border:2px solid #e3d089;
+    font-size:15px; background:#fff;
+  }
+  table{ width:100%; border-collapse: collapse; font-size:12px; margin-top:8px; }
+  th, td{ padding:6px 4px; text-align:center; border-bottom:1px solid #ecdca0; }
+  th{ color:var(--ink-soft); font-size:11px; text-transform:uppercase; }
+  .diff-win{ color: var(--green); font-weight:800; }
+  .diff-lose{ color: var(--red); font-weight:800; }
+  .empty-msg{ color:var(--ink-soft); font-size:13px; padding:20px 0; }
+  .close-x{
+    position:absolute; top:10px; right:14px; background:none; border:none;
+    font-size:22px; color:var(--ink-soft); cursor:pointer; font-weight:700;
+  }
+  .modal .card{ position:relative; }
+
+  /* Estela del dedo */
+  .finger-glow{
+    position:fixed; width:64px; height:64px; border-radius:50%;
+    background: radial-gradient(circle, rgba(255,255,255,.55) 0%, rgba(255,255,255,.18) 55%, rgba(255,255,255,0) 75%);
+    transform: translate(-50%,-50%);
+    pointer-events:none; z-index:40; will-change: left, top;
+  }
+  .trail-dot{
+    position:fixed; border-radius:50%;
+    background: rgba(255,255,255,.5);
+    transform: translate(-50%,-50%) scale(1);
+    pointer-events:none; z-index:39;
+    animation: trailFade .5s ease-out forwards;
+  }
+  @keyframes trailFade{
+    from{ opacity:.5; transform: translate(-50%,-50%) scale(1); }
+    to{ opacity:0; transform: translate(-50%,-50%) scale(2.1); }
+  }
+</style>
+</head>
+<body>
+
+  <div class="board" id="board">
+    <div class="half" id="p1" data-player="1">
+      <div class="half-content">
+        <div class="half-name" id="name1">Jugador 1</div>
+        <div class="half-hint" id="hint1">Mantén presionado</div>
+      </div>
+    </div>
+    <div class="half" id="p2" data-player="2">
+      <div class="half-content">
+        <div class="half-name" id="name2">Jugador 2</div>
+        <div class="half-hint" id="hint2">Mantén presionado</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <button id="btnNames">Nombres</button>
+    <button id="btnHistory">Historial</button>
+  </div>
+
+  <!-- Overlay de resultado -->
+  <div class="overlay" id="resultOverlay">
+    <div class="card">
+      <h2 id="resultTitle">¡Gana Jugador 1!</h2>
+      <p id="resultSubtitle">Reaccionó primero</p>
+      <div class="times" id="resultTimes"></div>
+      <button id="btnPlayAgain">Jugar otra vez</button>
+    </div>
+  </div>
+
+  <!-- Modal Nombres -->
+  <div class="modal" id="namesModal">
+    <div class="card">
+      <button class="close-x" data-close="namesModal">×</button>
+      <h2>Cambiar nombres</h2>
+      <div class="field">
+        <label>Jugador 1</label>
+        <input type="text" id="inputName1" maxlength="16">
+      </div>
+      <div class="field">
+        <label>Jugador 2</label>
+        <input type="text" id="inputName2" maxlength="16">
+      </div>
+      <button id="btnSaveNames">Guardar</button>
+    </div>
+  </div>
+
+  <!-- Modal Historial -->
+  <div class="modal" id="historyModal">
+    <div class="card">
+      <button class="close-x" data-close="historyModal">×</button>
+      <h2>Historial de partidas</h2>
+      <div id="historyContent"></div>
+      <button class="secondary" id="btnClearHistory">Borrar historial</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Estado y almacenamiento ----------
+  const LS_NAMES = 'duelo_amarillo_names';
+  const LS_HISTORY = 'duelo_amarillo_history';
+
+  let names = JSON.parse(localStorage.getItem(LS_NAMES) || 'null') || { p1:'Jugador 1', p2:'Jugador 2' };
+  let history = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]');
+
+  const el = {
+    p1: document.getElementById('p1'),
+    p2: document.getElementById('p2'),
+    name1: document.getElementById('name1'),
+    name2: document.getElementById('name2'),
+    hint1: document.getElementById('hint1'),
+    hint2: document.getElementById('hint2'),
+    resultOverlay: document.getElementById('resultOverlay'),
+    resultTitle: document.getElementById('resultTitle'),
+    resultSubtitle: document.getElementById('resultSubtitle'),
+    resultTimes: document.getElementById('resultTimes'),
+    btnPlayAgain: document.getElementById('btnPlayAgain'),
+    namesModal: document.getElementById('namesModal'),
+    historyModal: document.getElementById('historyModal'),
+    btnNames: document.getElementById('btnNames'),
+    btnHistory: document.getElementById('btnHistory'),
+    inputName1: document.getElementById('inputName1'),
+    inputName2: document.getElementById('inputName2'),
+    btnSaveNames: document.getElementById('btnSaveNames'),
+    historyContent: document.getElementById('historyContent'),
+    btnClearHistory: document.getElementById('btnClearHistory'),
+  };
+
+  function renderNames(){
+    el.name1.textContent = names.p1;
+    el.name2.textContent = names.p2;
+  }
+  renderNames();
+
+  // ---------- Colores ----------
+  const COLOR_NORMAL = [244,196,0];   // yellow
+  const COLOR_PRESS  = [217,173,0];   // yellow-press (un jugador presiona)
+  const COLOR_DARK   = [138,109,0];   // yellow-dark (justo antes del verde)
+  const COLOR_GREEN  = [22,163,74];   // green
+
+  function rgb(c){ return `rgb(${c[0]},${c[1]},${c[2]})`; }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+  function lerpColor(a,b,t){
+    return [lerp(a[0],b[0],t), lerp(a[1],b[1],t), lerp(a[2],b[2],t)].map(Math.round);
+  }
+  function setBoth(color){
+    el.p1.style.background = color;
+    el.p2.style.background = color;
+  }
+  function setOne(half, color){
+    (half===1?el.p1:el.p2).style.background = color;
+  }
+
+  // ---------- Máquina de estados del juego ----------
+  // idle -> waiting (ambos presionan, se oscurece) -> go (verde) -> finished
+  let state = 'idle';
+  let pressing = { 1:false, 2:false };
+  let waitStart = 0, goStart = 0, randomDelay = 0;
+  let times = { 1:null, 2:null };
+  let winner = null;
+  let rafId = null;
+
+  function resetHint(){
+    el.hint1.textContent = 'Mantén presionado';
+    el.hint2.textContent = 'Mantén presionado';
+  }
+
+  function resetGame(){
+    state = 'idle';
+    pressing = { 1:false, 2:false };
+    times = { 1:null, 2:null };
+    winner = null;
+    if(rafId) cancelAnimationFrame(rafId);
+    setBoth(rgb(COLOR_NORMAL));
+    resetHint();
+  }
+  resetGame();
+
+  function loop(){
+    if(state !== 'waiting') return;
+    const elapsed = performance.now() - waitStart;
+    const t = Math.min(elapsed / randomDelay, 1);
+    const c = lerpColor(COLOR_PRESS, COLOR_DARK, t);
+    setBoth(rgb(c));
+    if(elapsed >= randomDelay){
+      triggerGo();
+    } else {
+      rafId = requestAnimationFrame(loop);
+    }
+  }
+
+  function triggerGo(){
+    state = 'go';
+    goStart = performance.now();
+    setBoth(rgb(COLOR_GREEN));
+    el.hint1.textContent = '¡YA!';
+    el.hint2.textContent = '¡YA!';
+  }
+
+  function startWaitingIfReady(){
+    if(state === 'idle' && pressing[1] && pressing[2]){
+      state = 'waiting';
+      waitStart = performance.now();
+      randomDelay = 2200 + Math.random() * 3600; // 2.2s a 5.8s, tiempo moderado
+      setBoth(rgb(COLOR_PRESS));
+      el.hint1.textContent = 'Espera...';
+      el.hint2.textContent = 'Espera...';
+      rafId = requestAnimationFrame(loop);
+    }
+  }
+
+  function foul(byPlayer){
+    if(state !== 'waiting') return;
+    if(rafId) cancelAnimationFrame(rafId);
+    state = 'finished';
+    const other = byPlayer === 1 ? 2 : 1;
+    winner = other;
+    showResult({ foulBy: byPlayer });
+  }
+
+  function handleLift(player){
+    if(state === 'go'){
+      if(times[player] === null){
+        times[player] = performance.now() - goStart;
+        (player===1?el.p1:el.p2).style.background = rgb(COLOR_NORMAL);
+        (player===1?el.hint1:el.hint2).textContent = '¡Listo!';
+        if(winner === null){
+          winner = player;
+        }
+        if(times[1] !== null && times[2] !== null){
+          state = 'finished';
+          showResult({});
+        }
+      }
+    }
+  }
+
+  function saveHistoryRecord(rec){
+    history.unshift(rec);
+    if(history.length > 200) history.pop();
+    localStorage.setItem(LS_HISTORY, JSON.stringify(history));
+  }
+
+  function showResult(opts){
+    let rec;
+    if(opts.foulBy){
+      const foulName = opts.foulBy === 1 ? names.p1 : names.p2;
+      const winName = opts.foulBy === 1 ? names.p2 : names.p1;
+      el.resultTitle.textContent = `¡Gana ${winName}!`;
+      el.resultSubtitle.textContent = `${foulName} levantó el dedo antes de tiempo`;
+      el.resultTimes.innerHTML = '';
+      rec = {
+        ts: Date.now(), p1: names.p1, p2: names.p2,
+        t1: null, t2: null, winner, foul: opts.foulBy
+      };
+    } else {
+      const winName = winner === 1 ? names.p1 : names.p2;
+      const loseName = winner === 1 ? names.p2 : names.p1;
+      el.resultTitle.textContent = `¡Gana ${winName}!`;
+      el.resultSubtitle.textContent = 'Fue el más rápido en reaccionar';
+      const t1 = Math.round(times[1]);
+      const t2 = Math.round(times[2]);
+      const diff = Math.abs(t1 - t2);
+      el.resultTimes.innerHTML = `
+        <div class="time-box">
+          <div class="n">${loseName}</div>
+          <div class="v lose">-${diff}ms</div>
+        </div>`;
+      rec = {
+        ts: Date.now(), p1: names.p1, p2: names.p2,
+        t1, t2, winner, foul: null
+      };
+    }
+    saveHistoryRecord(rec);
+    el.resultOverlay.classList.add('show');
+  }
+
+  el.btnPlayAgain.addEventListener('click', () => {
+    el.resultOverlay.classList.remove('show');
+    resetGame();
+  });
+
+  // ---------- Estela del dedo ----------
+  const glow = { 1:null, 2:null };
+  const lastSpawn = { 1:0, 2:0 };
+
+  function makeGlow(){
+    const g = document.createElement('div');
+    g.className = 'finger-glow';
+    document.body.appendChild(g);
+    return g;
+  }
+  function moveGlow(player, x, y){
+    if(!glow[player]){
+      glow[player] = makeGlow();
+    }
+    glow[player].style.left = x + 'px';
+    glow[player].style.top = y + 'px';
+  }
+  function removeGlow(player){
+    if(glow[player]){
+      glow[player].remove();
+      glow[player] = null;
+    }
+  }
+  function spawnTrailDot(x, y){
+    const dot = document.createElement('div');
+    const size = 14 + Math.random() * 14;
+    dot.className = 'trail-dot';
+    dot.style.left = x + 'px';
+    dot.style.top = y + 'px';
+    dot.style.width = size + 'px';
+    dot.style.height = size + 'px';
+    document.body.appendChild(dot);
+    setTimeout(() => dot.remove(), 520);
+  }
+
+  // ---------- Entradas táctiles / mouse por jugador ----------
+  function bindHalf(elHalf, player){
+    const onDown = (e) => {
+      e.preventDefault();
+      if(document.querySelector('.modal.show')) return;
+      pressing[player] = true;
+      moveGlow(player, e.clientX, e.clientY);
+      if(state === 'idle'){
+        setOne(player, rgb(COLOR_PRESS));
+        startWaitingIfReady();
+      } else if(state === 'go'){
+        handleLift(player); // presionar durante 'go' no cuenta como reacción; solo soltar cuenta
+      }
+    };
+    const onMove = (e) => {
+      if(!pressing[player]) return;
+      moveGlow(player, e.clientX, e.clientY);
+      const now = performance.now();
+      if(now - lastSpawn[player] > 35){
+        lastSpawn[player] = now;
+        spawnTrailDot(e.clientX, e.clientY);
+      }
+    };
+    const onUp = (e) => {
+      e.preventDefault();
+      pressing[player] = false;
+      removeGlow(player);
+      if(state === 'idle'){
+        setOne(player, rgb(COLOR_NORMAL));
+      } else if(state === 'waiting'){
+        foul(player);
+      } else if(state === 'go'){
+        handleLift(player);
+      }
+    };
+    elHalf.addEventListener('pointerdown', onDown);
+    elHalf.addEventListener('pointermove', onMove);
+    elHalf.addEventListener('pointerup', onUp);
+    elHalf.addEventListener('pointercancel', onUp);
+    elHalf.addEventListener('pointerleave', (e) => {
+      // si el dedo se arrastra fuera de su mitad, se trata como si soltara
+      if(pressing[player]) onUp(e);
+    });
+    elHalf.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+  bindHalf(el.p1, 1);
+  bindHalf(el.p2, 2);
+
+  // ---------- Modal: nombres ----------
+  function openModal(id){
+    if(state !== 'idle') resetGame();
+    document.getElementById(id).classList.add('show');
+  }
+  function closeModal(id){
+    document.getElementById(id).classList.remove('show');
+  }
+  document.querySelectorAll('[data-close]').forEach(btn=>{
+    btn.addEventListener('click', () => closeModal(btn.getAttribute('data-close')));
+  });
+
+  el.btnNames.addEventListener('click', () => {
+    el.inputName1.value = names.p1;
+    el.inputName2.value = names.p2;
+    openModal('namesModal');
+  });
+  el.btnSaveNames.addEventListener('click', () => {
+    const n1 = el.inputName1.value.trim();
+    const n2 = el.inputName2.value.trim();
+    names.p1 = n1 || 'Jugador 1';
+    names.p2 = n2 || 'Jugador 2';
+    localStorage.setItem(LS_NAMES, JSON.stringify(names));
+    renderNames();
+    closeModal('namesModal');
+  });
+
+  // ---------- Modal: historial ----------
+  function renderHistory(){
+    if(history.length === 0){
+      el.historyContent.innerHTML = '<div class="empty-msg">Todavía no hay partidas jugadas.</div>';
+      return;
+    }
+    let rows = history.map((r, i) => {
+      const num = history.length - i;
+      if(r.foul){
+        const foulName = r.foul === 1 ? r.p1 : r.p2;
+        const winName = r.foul === 1 ? r.p2 : r.p1;
+        return `<tr>
+          <td>${num}</td><td>${r.p1}</td><td>—</td><td>${r.p2}</td><td>—</td>
+          <td colspan="2" style="color:var(--red);font-weight:700;">${foulName} salida en falso · gana ${winName}</td>
+        </tr>`;
+      }
+      const winnerName = r.winner === 1 ? r.p1 : r.p2;
+      const diff = Math.abs(r.t1 - r.t2);
+      const diff1 = r.winner === 1 ? '—' : `<span class="diff-lose">-${diff}ms</span>`;
+      const diff2 = r.winner === 2 ? '—' : `<span class="diff-lose">-${diff}ms</span>`;
+      return `<tr>
+        <td>${num}</td>
+        <td>${r.p1}</td><td>${diff1}</td>
+        <td>${r.p2}</td><td>${diff2}</td>
+        <td><strong>${winnerName}</strong></td>
+      </tr>`;
+    }).join('');
+    el.historyContent.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>#</th><th>J1</th><th>Dif. J1</th><th>J2</th><th>Dif. J2</th><th>Ganador</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  el.btnHistory.addEventListener('click', () => {
+    renderHistory();
+    openModal('historyModal');
+  });
+  el.btnClearHistory.addEventListener('click', () => {
+    if(confirm('¿Borrar todo el historial de partidas?')){
+      history = [];
+      localStorage.setItem(LS_HISTORY, '[]');
+      renderHistory();
+    }
+  });
+
+  // Evitar el zoom por doble toque y el scroll del documento
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  document.addEventListener('dblclick', e => e.preventDefault());
+
+})();
+</script>
+</body>
+</html>
