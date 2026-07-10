@@ -96,6 +96,7 @@
     box-shadow: 0 12px 40px rgba(0,0,0,.4);
   }
   .card h2{ margin:0 0 6px; font-size:26px; }
+  #resultTitle{ color: var(--green); }
   .card p{ margin:4px 0; color:var(--ink-soft); font-size:14px; }
   .times{ display:flex; justify-content:space-between; margin:16px 0; gap:10px; }
   .time-box{ flex:1; background:#fff; border-radius:12px; padding:10px; }
@@ -112,6 +113,9 @@
     background:transparent; color:var(--ink); border:2px solid var(--ink);
     margin-top:8px;
   }
+  .card button.secondary.disabled{
+    opacity:.5; pointer-events:none;
+  }
 
   /* Modales */
   .modal{
@@ -124,14 +128,41 @@
   .field label{ display:block; font-size:12px; font-weight:700; color:var(--ink-soft); margin-bottom:4px; }
   .field input{
     width:100%; padding:10px 12px; border-radius:10px; border:2px solid #e3d089;
-    font-size:15px; background:#fff;
+    font-size:15px; background:#fff; color:var(--ink);
   }
-  table{ width:100%; border-collapse: collapse; font-size:12px; margin-top:8px; }
-  th, td{ padding:6px 4px; text-align:center; border-bottom:1px solid #ecdca0; }
-  th{ color:var(--ink-soft); font-size:11px; text-transform:uppercase; }
-  .diff-win{ color: var(--green); font-weight:800; }
-  .diff-lose{ color: var(--red); font-weight:800; }
-  .empty-msg{ color:var(--ink-soft); font-size:13px; padding:20px 0; }
+  .field input::placeholder{ color:#8a8a8a; font-weight:500; }
+
+  /* Marcador grande de victorias */
+  .score-board{
+    display:flex; align-items:center; justify-content:center;
+    gap:16px; margin:2px 0 18px;
+  }
+  .score-side{ text-align:center; max-width:110px; }
+  .score-num{ font-size:44px; font-weight:900; line-height:1; color:var(--ink); }
+  .score-num.lead{ color:var(--green); }
+  .score-num.trail{ color:var(--red); }
+  .score-name{
+    margin-top:2px; font-size:12px; font-weight:700; color:var(--ink-soft);
+    text-transform:uppercase; letter-spacing:.3px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .score-sep{ font-size:26px; font-weight:800; color:var(--ink-soft); }
+
+  /* Lista de historial */
+  .history-list{
+    display:flex; flex-direction:column; gap:8px;
+    max-height:42vh; overflow:auto; margin-top:4px;
+  }
+  .history-item{
+    display:flex; align-items:center; gap:10px;
+    background:#fff; border-radius:12px; padding:10px 12px; text-align:left;
+  }
+  .history-item .round-num{ font-size:11px; color:var(--ink-soft); font-weight:700; width:20px; flex-shrink:0; }
+  .history-item .winner{ font-weight:800; font-size:14px; flex:1; }
+  .history-item .diff{ color:var(--green); font-weight:800; font-size:14px; white-space:nowrap; }
+  .history-item .foul-note{ color:var(--red); font-weight:700; font-size:12px; white-space:nowrap; }
+
+  .empty-msg{ color:var(--ink-soft); font-size:13px; padding:20px 0; text-align:center; }
   .close-x{
     position:absolute; top:10px; right:14px; background:none; border:none;
     font-size:22px; color:var(--ink-soft); cursor:pointer; font-weight:700;
@@ -197,11 +228,11 @@
       <h2>Cambiar nombres</h2>
       <div class="field">
         <label>Jugador 1</label>
-        <input type="text" id="inputName1" maxlength="16">
+        <input type="text" id="inputName1" maxlength="16" placeholder="Jugador 1" autocomplete="off">
       </div>
       <div class="field">
         <label>Jugador 2</label>
-        <input type="text" id="inputName2" maxlength="16">
+        <input type="text" id="inputName2" maxlength="16" placeholder="Jugador 2" autocomplete="off">
       </div>
       <button id="btnSaveNames">Guardar</button>
     </div>
@@ -213,7 +244,10 @@
       <button class="close-x" data-close="historyModal">×</button>
       <h2>Historial de partidas</h2>
       <div id="historyContent"></div>
-      <button class="secondary" id="btnClearHistory">Borrar historial</button>
+      <button class="secondary" id="btnClearHistory" style="position:relative;overflow:hidden;z-index:0;">
+        <span id="clearHistoryLabel" style="position:relative;z-index:1;">Pulsa 3s para borrar historial</span>
+        <span id="clearHistoryProgress" style="position:absolute;left:0;top:0;bottom:0;width:0%;background:rgba(244,196,0,.55);z-index:0;"></span>
+      </button>
     </div>
   </div>
 
@@ -389,7 +423,7 @@
       el.resultTimes.innerHTML = `
         <div class="time-box">
           <div class="n">${loseName}</div>
-          <div class="v lose">-${diff}ms</div>
+          <div class="v lose">${diff}ms</div>
         </div>`;
       rec = {
         ts: Date.now(), p1: names.p1, p2: names.p2,
@@ -501,15 +535,17 @@
   });
 
   el.btnNames.addEventListener('click', () => {
-    el.inputName1.value = names.p1;
-    el.inputName2.value = names.p2;
+    el.inputName1.placeholder = names.p1;
+    el.inputName2.placeholder = names.p2;
+    el.inputName1.value = '';
+    el.inputName2.value = '';
     openModal('namesModal');
   });
   el.btnSaveNames.addEventListener('click', () => {
     const n1 = el.inputName1.value.trim();
     const n2 = el.inputName2.value.trim();
-    names.p1 = n1 || 'Jugador 1';
-    names.p2 = n2 || 'Jugador 2';
+    if(n1) names.p1 = n1;
+    if(n2) names.p2 = n2;
     localStorage.setItem(LS_NAMES, JSON.stringify(names));
     renderNames();
     closeModal('namesModal');
@@ -517,51 +553,111 @@
 
   // ---------- Modal: historial ----------
   function renderHistory(){
+    const wins1 = history.filter(r => r.winner === 1).length;
+    const wins2 = history.filter(r => r.winner === 2).length;
+
+    const scoreHtml = `
+      <div class="score-board">
+        <div class="score-side">
+          <div class="score-num ${wins1 > wins2 ? 'lead' : (wins2 > wins1 ? 'trail' : '')}">${wins1}</div>
+          <div class="score-name">${names.p1}</div>
+        </div>
+        <div class="score-sep">–</div>
+        <div class="score-side">
+          <div class="score-num ${wins2 > wins1 ? 'lead' : (wins1 > wins2 ? 'trail' : '')}">${wins2}</div>
+          <div class="score-name">${names.p2}</div>
+        </div>
+      </div>`;
+
     if(history.length === 0){
-      el.historyContent.innerHTML = '<div class="empty-msg">Todavía no hay partidas jugadas.</div>';
+      el.historyContent.innerHTML = scoreHtml + '<div class="empty-msg">Todavía no hay partidas jugadas.</div>';
       return;
     }
-    let rows = history.map((r, i) => {
+
+    const items = history.map((r, i) => {
       const num = history.length - i;
+      const winnerName = r.winner === 1 ? r.p1 : r.p2;
+
       if(r.foul){
         const foulName = r.foul === 1 ? r.p1 : r.p2;
-        const winName = r.foul === 1 ? r.p2 : r.p1;
-        return `<tr>
-          <td>${num}</td><td>${r.p1}</td><td>—</td><td>${r.p2}</td><td>—</td>
-          <td colspan="2" style="color:var(--red);font-weight:700;">${foulName} salida en falso · gana ${winName}</td>
-        </tr>`;
+        return `<div class="history-item">
+          <span class="round-num">#${num}</span>
+          <span class="winner">${winnerName}</span>
+          <span class="foul-note">${foulName} salió antes de tiempo</span>
+        </div>`;
       }
-      const winnerName = r.winner === 1 ? r.p1 : r.p2;
+
       const diff = Math.abs(r.t1 - r.t2);
-      const diff1 = r.winner === 1 ? '—' : `<span class="diff-lose">-${diff}ms</span>`;
-      const diff2 = r.winner === 2 ? '—' : `<span class="diff-lose">-${diff}ms</span>`;
-      return `<tr>
-        <td>${num}</td>
-        <td>${r.p1}</td><td>${diff1}</td>
-        <td>${r.p2}</td><td>${diff2}</td>
-        <td><strong>${winnerName}</strong></td>
-      </tr>`;
+      return `<div class="history-item">
+        <span class="round-num">#${num}</span>
+        <span class="winner">${winnerName}</span>
+        <span class="diff">+${diff}ms</span>
+      </div>`;
     }).join('');
-    el.historyContent.innerHTML = `
-      <table>
-        <thead><tr>
-          <th>#</th><th>J1</th><th>Dif. J1</th><th>J2</th><th>Dif. J2</th><th>Ganador</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`;
+
+    el.historyContent.innerHTML = scoreHtml + `<div class="history-list">${items}</div>`;
   }
 
   el.btnHistory.addEventListener('click', () => {
     renderHistory();
+    updateClearButtonState();
     openModal('historyModal');
   });
-  el.btnClearHistory.addEventListener('click', () => {
-    if(confirm('¿Borrar todo el historial de partidas?')){
+  let clearHoldTimer = null;
+  let clearHoldStart = 0;
+  let clearHoldRaf = null;
+  const clearProgressEl = document.getElementById('clearHistoryProgress');
+  const clearLabelEl = document.getElementById('clearHistoryLabel');
+  const CLEAR_HOLD_MS = 3000;
+
+  function updateClearButtonState(){
+    const empty = history.length === 0;
+    if(empty){
+      clearLabelEl.textContent = 'Juega para crear un historial';
+      el.btnClearHistory.classList.add('disabled');
+    } else {
+      clearLabelEl.textContent = 'Pulsa 3s para borrar historial';
+      el.btnClearHistory.classList.remove('disabled');
+    }
+    clearProgressEl.style.width = '0%';
+  }
+
+  function clearHoldTick(){
+    const elapsed = performance.now() - clearHoldStart;
+    const pct = Math.min(elapsed / CLEAR_HOLD_MS, 1) * 100;
+    clearProgressEl.style.width = pct + '%';
+    if(elapsed < CLEAR_HOLD_MS){
+      clearHoldRaf = requestAnimationFrame(clearHoldTick);
+    }
+  }
+  function startClearHold(e){
+    if(history.length === 0) return;
+    e.preventDefault();
+    clearHoldStart = performance.now();
+    clearHoldRaf = requestAnimationFrame(clearHoldTick);
+    clearHoldTimer = setTimeout(() => {
       history = [];
       localStorage.setItem(LS_HISTORY, '[]');
       renderHistory();
+      resetClearHold();
+      updateClearButtonState();
+    }, CLEAR_HOLD_MS);
+  }
+  function resetClearHold(){
+    if(clearHoldTimer){ clearTimeout(clearHoldTimer); clearHoldTimer = null; }
+    if(clearHoldRaf){ cancelAnimationFrame(clearHoldRaf); clearHoldRaf = null; }
+    clearProgressEl.style.width = '0%';
+  }
+  function cancelClearHold(){
+    if(clearHoldTimer){
+      resetClearHold();
     }
-  });
+  }
+  el.btnClearHistory.addEventListener('pointerdown', startClearHold);
+  el.btnClearHistory.addEventListener('pointerup', cancelClearHold);
+  el.btnClearHistory.addEventListener('pointerleave', cancelClearHold);
+  el.btnClearHistory.addEventListener('pointercancel', cancelClearHold);
+  updateClearButtonState();
 
   // Evitar el zoom por doble toque y el scroll del documento
   document.addEventListener('gesturestart', e => e.preventDefault());
