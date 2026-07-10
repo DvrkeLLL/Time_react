@@ -97,6 +97,7 @@
   }
   .card h2{ margin:0 0 6px; font-size:26px; }
   #resultTitle{ color: var(--green); }
+  #resultTitle.draw{ color: var(--ink); }
   .card p{ margin:4px 0; color:var(--ink-soft); font-size:14px; }
   .times{ display:flex; justify-content:space-between; margin:16px 0; gap:10px; }
   .time-box{ flex:1; background:#fff; border-radius:12px; padding:10px; }
@@ -110,8 +111,8 @@
     width:100%; cursor:pointer;
   }
   .card button.secondary{
-    background:transparent; color:var(--ink); border:2px solid var(--ink);
-    margin-top:8px;
+    background:#ffffff; color:var(--ink); border:2px solid var(--ink);
+    margin-top:8px; position:relative; overflow:hidden; isolation:isolate;
   }
   .card button.secondary.disabled{
     opacity:.5; pointer-events:none;
@@ -163,10 +164,16 @@
   .history-item .foul-note{ color:var(--red); font-weight:700; font-size:12px; white-space:nowrap; }
 
   .empty-msg{ color:var(--ink-soft); font-size:13px; padding:20px 0; text-align:center; }
-  .close-x{
-    position:absolute; top:10px; right:14px; background:none; border:none;
-    font-size:22px; color:var(--ink-soft); cursor:pointer; font-weight:700;
+  .card button.close-x{
+    position:absolute; top:12px; right:12px;
+    width:30px; height:30px; border-radius:50%;
+    background: var(--red); color:#fff;
+    border:none; font-size:16px; font-weight:800; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; box-shadow: 0 2px 6px rgba(0,0,0,.25);
+    margin-top:0; padding:0;
   }
+  .card button.close-x:active{ filter: brightness(0.9); }
   .modal .card{ position:relative; }
 
   /* Estela del dedo */
@@ -405,30 +412,44 @@
     if(opts.foulBy){
       const foulName = opts.foulBy === 1 ? names.p1 : names.p2;
       const winName = opts.foulBy === 1 ? names.p2 : names.p1;
+      el.resultTitle.classList.remove('draw');
       el.resultTitle.textContent = `¡Gana ${winName}!`;
       el.resultSubtitle.textContent = `${foulName} levantó el dedo antes de tiempo`;
       el.resultTimes.innerHTML = '';
       rec = {
         ts: Date.now(), p1: names.p1, p2: names.p2,
-        t1: null, t2: null, winner, foul: opts.foulBy
+        t1: null, t2: null, winner, draw: false, foul: opts.foulBy
       };
     } else {
-      const winName = winner === 1 ? names.p1 : names.p2;
-      const loseName = winner === 1 ? names.p2 : names.p1;
-      el.resultTitle.textContent = `¡Gana ${winName}!`;
-      el.resultSubtitle.textContent = 'Fue el más rápido en reaccionar';
       const t1 = Math.round(times[1]);
       const t2 = Math.round(times[2]);
       const diff = Math.abs(t1 - t2);
-      el.resultTimes.innerHTML = `
-        <div class="time-box">
-          <div class="n">${loseName}</div>
-          <div class="v lose">${diff}ms</div>
-        </div>`;
-      rec = {
-        ts: Date.now(), p1: names.p1, p2: names.p2,
-        t1, t2, winner, foul: null
-      };
+
+      if(diff === 0){
+        el.resultTitle.textContent = '¡Empate!';
+        el.resultTitle.classList.add('draw');
+        el.resultSubtitle.textContent = 'Reaccionaron exactamente igual';
+        el.resultTimes.innerHTML = '';
+        rec = {
+          ts: Date.now(), p1: names.p1, p2: names.p2,
+          t1, t2, winner: null, draw: true, foul: null
+        };
+      } else {
+        const winName = winner === 1 ? names.p1 : names.p2;
+        const loseName = winner === 1 ? names.p2 : names.p1;
+        el.resultTitle.classList.remove('draw');
+        el.resultTitle.textContent = `¡Gana ${winName}!`;
+        el.resultSubtitle.textContent = 'Fue el más rápido en reaccionar';
+        el.resultTimes.innerHTML = `
+          <div class="time-box">
+            <div class="n">${loseName}</div>
+            <div class="v lose">${diff}ms</div>
+          </div>`;
+        rec = {
+          ts: Date.now(), p1: names.p1, p2: names.p2,
+          t1, t2, winner, draw: false, foul: null
+        };
+      }
     }
     saveHistoryRecord(rec);
     el.resultOverlay.classList.add('show');
@@ -576,10 +597,10 @@
 
     const items = history.map((r, i) => {
       const num = history.length - i;
-      const winnerName = r.winner === 1 ? r.p1 : r.p2;
 
       if(r.foul){
         const foulName = r.foul === 1 ? r.p1 : r.p2;
+        const winnerName = r.winner === 1 ? r.p1 : r.p2;
         return `<div class="history-item">
           <span class="round-num">#${num}</span>
           <span class="winner">${winnerName}</span>
@@ -587,6 +608,15 @@
         </div>`;
       }
 
+      if(r.draw){
+        return `<div class="history-item">
+          <span class="round-num">#${num}</span>
+          <span class="winner">Empate</span>
+          <span class="foul-note" style="color:var(--ink-soft);">${r.p1} y ${r.p2}</span>
+        </div>`;
+      }
+
+      const winnerName = r.winner === 1 ? r.p1 : r.p2;
       const diff = Math.abs(r.t1 - r.t2);
       return `<div class="history-item">
         <span class="round-num">#${num}</span>
